@@ -17,7 +17,6 @@
 #include <pins_arduino.h>
 
 const char* TAG = "MAIN";
-int debug = 1; // Debug-Modus: 1 aktiviert, 0 deaktiviert
 
 AsyncWebServer webServer(80);
 PN532_SPI *pn532spi;
