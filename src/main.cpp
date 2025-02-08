@@ -125,7 +125,6 @@ void with_crc16(unsigned char* data, unsigned int size, unsigned char* result) {
   crc16a(data, size, result);
 }
 
-
 void gpio_task(void* arg) {
   gpioLockAction status;
   while (1) {
@@ -231,7 +230,6 @@ struct NFCAccess : Service::NFCAccess
     nfcControlPoint->setTLV(res, false);
     return true;
   }
-
 };
 
 void deleteReaderData(const char* buf = "") {
@@ -655,7 +653,6 @@ void setupWeb() {
   webServer.begin();
 }
 
-
 std::string hex_representation(const std::vector<uint8_t>& v) {
   std::string hex_tmp;
   for (auto x : v) {
@@ -668,7 +665,6 @@ std::string hex_representation(const std::vector<uint8_t>& v) {
 
 void nfc_thread_entry(void* arg) {
   nfc->begin();
-
   uint32_t versiondata = nfc->getFirmwareVersion();
   if (!versiondata) {
     ESP_LOGE("NFC_SETUP", "Didn't find PN53x board");
