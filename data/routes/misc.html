@@ -24,38 +24,6 @@
                         <input type="number" name="hk-setupcode" id="hk-setupcode" placeholder="46637726" required
                             value="%HKSETUPCODE%" style="width: fit-content;" />
                     </div>
-                    <div style="display: flex;gap: 8px;">
-                        <label for="hk-always-lock">Always Lock on HomeKey</label>
-                        <select name="hk-always-lock" id="hk-always-lock">
-                            <option value="0">Disabled</option>
-                            <option value="1">Enabled</option>
-                        </select>
-                    </div>
-                    <div style="display: flex;gap: 8px;">
-                        <label for="hk-always-unlock">Always Unlock on HomeKey</label>
-                        <select name="hk-always-unlock" id="hk-always-unlock">
-                            <option value="0">Disabled</option>
-                            <option value="1">Enabled</option>
-                        </select>
-                    </div>
-                    <div style="display: flex;gap: 8px;">
-                        <label for="homekit-dumb-switch-mode">Dumb Switch Mode</label>
-                        <select name="homekit-dumb-switch-mode" id="homekit-dumb-switch-mode">
-                            <option value="0">Disabled</option>
-                            <option value="1">Enabled</option>
-                        </select>
-                    </div>
-                    <div style="display: flex;gap: 8px;">
-                        <label for="prox-bat-enable">SmartLock battery reporting</label>
-                        <select name="prox-bat-enable" id="prox-bat-enable">
-                            <option value="0">Disabled</option>
-                            <option value="1">Enabled</option>
-                        </select>
-                    </div>
-                    <div style="display: flex;gap: 8px;">
-                        <label for="btr-low-threshold">Battery low status Threshold</label>
-                        <input type="number" name="btr-low-threshold" id="btr-low-threshold" placeholder="10" min="0" max="100" value="%BTRLOWTHRESHOLD%" style="width: 4rem;" />
-                    </div>
                     <fieldset>
                         <legend>HomeKey Card Finish:</legend>
                         <div style="display: flex;justify-content: space-evenly;margin-bottom: 0;padding-bottom: 0;">
@@ -126,10 +94,6 @@
                         <label for="control-pin">HomeSpan Control GPIO Pin</label>
                         <input type="number" name="control-pin" id="control-pin" placeholder="26" required
                             value="%CONTROLPIN%" style="width: 4rem;" />
-                    </div>
-                    <div>
-                        <label for="led-pin">HomeSpan Status LED GPIO Pin</label>
-                        <input type="number" name="led-pin" id="led-pin" placeholder="2" required value="%LEDPIN%" style="width: 4rem;" />
                     </div>
                 </div>
             </div>
