@@ -14,16 +14,6 @@
                     <span style="height: 1px;border-top: 1px #424242 solid;display: block;margin: 0;padding: 0;"></span>
                 </div>
                 <div class="custom-tabs-selected-body" data-custom-tabs-body="0">
-                    <div style="display: flex;gap: 8px;">
-                        <label for="device-name">Device Name</label>
-                        <input type="text" name="device-name" id="device-name" placeholder="HK" required value="%DEVICENAME%"
-                            style="width: fit-content;" />
-                    </div>
-                    <div style="display: flex;gap: 8px;">
-                        <label for="hk-setupcode">Setup Code</label>
-                        <input type="number" name="hk-setupcode" id="hk-setupcode" placeholder="46637726" required
-                            value="%HKSETUPCODE%" style="width: fit-content;" />
-                    </div>
                     <fieldset>
                         <legend>HomeKey Card Finish:</legend>
                         <div style="display: flex;justify-content: space-evenly;margin-bottom: 0;padding-bottom: 0;">
@@ -58,43 +48,6 @@
                             </div>
                         </div>
                     </fieldset>
-                </div>
-                <div class="custom-tabs-hidden-body" data-custom-tabs-body="1">
-                    <div style="display: flex;flex-wrap: wrap;justify-content: center;gap: 16px;">
-                        <div style="display: flex;flex-direction: column;">
-                            <label for="nfc-ss-gpio-pin">SS Pin</label>
-                            <input type="number" name="nfc-ss-gpio-pin" id="nfc-ss-gpio-pin" placeholder="5" required
-                                value="%NFCSSGPIOPIN%" style="width: 4rem;" />
-                        </div>
-                        <div style="display: flex;flex-direction: column;">
-                            <label for="nfc-sck-gpio-pin">SCK Pin</label>
-                            <input type="number" name="nfc-sck-gpio-pin" id="nfc-sck-gpio-pin" placeholder="18" required
-                                value="%NFCSCKGPIOPIN%" style="width: 4rem;" />
-                        </div>
-                        <div style="display: flex;flex-direction: column;">
-                            <label for="nfc-miso-gpio-pin">MISO Pin</label>
-                            <input type="number" name="nfc-miso-gpio-pin" id="nfc-miso-gpio-pin" placeholder="19" required
-                                value="%NFCMISOGPIOPIN%" style="width: 4rem;" />
-                        </div>
-                        <div style="display: flex;flex-direction: column;">
-                            <label for="nfc-mosi-gpio-pin">MOSI Pin</label>
-                            <input type="number" name="nfc-mosi-gpio-pin" id="nfc-mosi-gpio-pin" placeholder="23" required
-                                value="%NFCMOSIGPIOPIN%" style="width: 4rem;" />
-                        </div>
-                    </div>
-                </div>
-                <div class="custom-tabs-hidden-body" data-custom-tabs-body="2">
-                    <a href="https://github.com/HomeSpan/HomeSpan/blob/master/docs/GettingStarted.md#adding-a-control-button-and-status-led-optional" style="margin-bottom: 1rem;color: white;">HomeSpan Documentation</a>
-                    <div>
-                        <label for="ota-passwd">OTA Password</label>
-                        <input type="password" name="ota-passwd" id="ota-passwd" placeholder="homespan-ota" required
-                            value="%OTAPASSWD%" />
-                    </div>
-                    <div>
-                        <label for="control-pin">HomeSpan Control GPIO Pin</label>
-                        <input type="number" name="control-pin" id="control-pin" placeholder="26" required
-                            value="%CONTROLPIN%" style="width: 4rem;" />
-                    </div>
                 </div>
             </div>
         </div>
@@ -147,11 +100,8 @@
         .getElementById(`hk-finish-${hwfinish}`)
         .setAttribute("checked", "");
     document.getElementById('hkfinish').style.backgroundImage = `url(assets/hk-finish-${hwfinish}.webp)`;
-    document.getElementById("hk-always-unlock").selectedIndex = "%ALWAYSUNLOCK%";
-    document.getElementById("hk-always-lock").selectedIndex = "%ALWAYSLOCK%";
     document.getElementById("web-auth-enable").selectedIndex = "%WEBENABLE%";
-    document.getElementById("prox-bat-enable").selectedIndex = "%PROXBATENABLE%";
-    document.getElementById("homekit-dumb-switch-mode").selectedIndex = "%DUMBSWITCHMODE%";
+
     let form = document.getElementById("misc-config");
     async function handleForm(event) {
       event.preventDefault();

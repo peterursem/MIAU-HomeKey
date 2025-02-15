@@ -1,7 +1,14 @@
+@font-face {
+    font-family: 'manrope';
+    src: url(/data/assets/Manrope.ttf) format("truetype");
+    font-display: swap;
+}
+
 :root {
   background-color: #353030;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.2) 0.05rem, transparent 8%);
+  background-image: radial-gradient(rgba(219, 33, 33, 0.883) 0.05rem, transparent 8%);
   background-size: 2vh 2.2vh;
+  font-family: 'manrope';
 }
 
 fieldset {
@@ -52,6 +59,7 @@ button {
     white-space: nowrap;
     font-weight: 500;
     font-size: .875rem;
+    font-family: 'manrope';
     line-height: 1.25rem;
     display: inline-flex;
     background-image: none;
