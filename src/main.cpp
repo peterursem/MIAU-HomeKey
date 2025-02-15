@@ -9,6 +9,7 @@
 #include <chrono>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
+#include <ESPmDNS.h>
 #include <LittleFS.h>
 #include <HK_HomeKit.h>
 #include "config.h"
@@ -21,9 +22,7 @@ const char* TAG = "MAIN";
 AsyncWebServer webServer(80);
 PN532_SPI *pn532spi;
 PN532 *nfc;
-QueueHandle_t gpio_led_handle = nullptr;
 QueueHandle_t gpio_lock_handle = nullptr;
-TaskHandle_t gpio_led_task_handle = nullptr;
 TaskHandle_t gpio_lock_task_handle = nullptr;
 
 nvs_handle savedData;
@@ -62,16 +61,12 @@ namespace espConfig
     bool gpioActionLockState = GPIO_ACTION_LOCK_STATE;
     bool gpioActionUnlockState = GPIO_ACTION_UNLOCK_STATE;
     uint8_t gpioActionMomentaryEnabled = GPIO_ACTION_MOMENTARY_STATE;
-    bool hkGpioControlledState = true;
     uint16_t gpioActionMomentaryTimeout = GPIO_ACTION_MOMENTARY_TIMEOUT;
     bool webAuthEnabled = WEB_AUTH_ENABLED;
     std::string webUsername = WEB_AUTH_USERNAME;
     std::string webPassword = WEB_AUTH_PASSWORD;
-    std::array<uint8_t, 4> nfcGpioPins{SS, SCK, MISO, MOSI};
-    uint8_t btrLowStatusThreshold = 10;
-    bool proxBatEnabled = false;
-    bool hkDumbSwitchMode = false;
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE_WITH_DEFAULT(misc_config_t, deviceName, otaPasswd, hk_key_color, setupCode, gpioActionPin, gpioActionLockState, gpioActionUnlockState, gpioActionMomentaryEnabled, gpioActionMomentaryTimeout, webAuthEnabled, webUsername, webPassword, nfcGpioPins, btrLowStatusThreshold, proxBatEnabled, hkDumbSwitchMode)
+	  std::array<uint8_t, 4> nfcGpioPins{7, 6, 5, 4};
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE_WITH_DEFAULT(misc_config_t, deviceName, otaPasswd, hk_key_color, setupCode, gpioActionPin, gpioActionLockState, gpioActionUnlockState, gpioActionMomentaryEnabled, gpioActionMomentaryTimeout, webAuthEnabled, webUsername, webPassword, nfcGpioPins)
   } miscConfig;
 };
 
@@ -167,24 +162,18 @@ struct LockMechanism : Service::LockMechanism
     lockTargetState = new Characteristic::LockTargetState(1, true);
     memcpy(ecpData + 8, readerData.reader_gid.data(), readerData.reader_gid.size());
     with_crc16(ecpData, 16, ecpData + 16);
-    if (espConfig::miscConfig.gpioActionPin != 255) {
-      if (lockCurrentState->getVal() == lockStates::LOCKED) {
-        digitalWrite(espConfig::miscConfig.gpioActionPin, espConfig::miscConfig.gpioActionLockState);
-      } else if (lockCurrentState->getVal() == lockStates::UNLOCKED) {
-        digitalWrite(espConfig::miscConfig.gpioActionPin, espConfig::miscConfig.gpioActionUnlockState);
-      }
+    if (lockCurrentState->getVal() == lockStates::LOCKED) {
+      digitalWrite(espConfig::miscConfig.gpioActionPin, espConfig::miscConfig.gpioActionLockState);
+    } else if (lockCurrentState->getVal() == lockStates::UNLOCKED) {
+      digitalWrite(espConfig::miscConfig.gpioActionPin, espConfig::miscConfig.gpioActionUnlockState);
     }
   } // end constructor
 
   boolean update() {
     int targetState = lockTargetState->getNewVal();
     LOG(I, "New LockState=%d, Current LockState=%d", targetState, lockCurrentState->getVal());
-    if (espConfig::miscConfig.gpioActionPin != 255) {
-      const gpioLockAction gpioAction{ .source = gpioLockAction::HOMEKIT, .action = 0 };
-      xQueueSend(gpio_lock_handle, &gpioAction, 0);
-    } else if (espConfig::miscConfig.hkDumbSwitchMode) {
-      lockCurrentState->setVal(targetState);
-    }
+    const gpioLockAction gpioAction{ .source = gpioLockAction::HOMEKIT, .action = 0 };
+    xQueueSend(gpio_lock_handle, &gpioAction, 0);
     return (true);
   }
 };
@@ -443,22 +432,6 @@ String indexProcess(const String& var) {
   return "";
 }
 
-String actionsProcess(const String& var) {
-  if (var == "GPIOAPIN") {
-    return String(espConfig::miscConfig.gpioActionPin);
-  } else if (var == "GPIOALOCK") {
-    return String(espConfig::miscConfig.gpioActionLockState);
-  } else if (var == "GPIOAUNLOCK") {
-    return String(espConfig::miscConfig.gpioActionUnlockState);
-  } else if (var == "GPIOAMOEN") {
-    return String(espConfig::miscConfig.gpioActionMomentaryEnabled);
-  } else if (var == "GPIOAMOTIME") {
-    return String(espConfig::miscConfig.gpioActionMomentaryTimeout);
-  } else if (var == "HKGPIOCONTROLSTATE") {
-    return String(espConfig::miscConfig.hkGpioControlledState);
-  }
-  return "";
-}
 bool headersFix(AsyncWebServerRequest* request) { request->addInterestingHeader("ANY"); return true; };
 void setupWeb() {
   auto infoHandle = new AsyncStaticWebHandler("/info", LittleFS, "/routes/info.html", NULL);
@@ -467,12 +440,8 @@ void setupWeb() {
   auto miscHandle = new AsyncStaticWebHandler("/misc", LittleFS, "/routes/misc.html", NULL);
   webServer.addHandler(miscHandle);
   miscHandle->setTemplateProcessor(miscHtmlProcess).setFilter(headersFix);
-  auto actionsHandle = new AsyncStaticWebHandler("/actions", LittleFS, "/routes/actions.html", NULL);
-  webServer.addHandler(actionsHandle);
-  actionsHandle->setTemplateProcessor(actionsProcess).setFilter(headersFix);
   auto assetsHandle = new AsyncStaticWebHandler("/assets", LittleFS, "/assets/", NULL);
   webServer.addHandler(assetsHandle);
-  actionsHandle->setFilter(headersFix);
   AsyncCallbackWebHandler* rootHandle = new AsyncCallbackWebHandler();
   webServer.addHandler(rootHandle);
   rootHandle->setUri("/");
@@ -508,38 +477,6 @@ void setupWeb() {
         espConfig::miscConfig.webUsername = p->value().c_str();
       } else if (!strcmp(p->name().c_str(), "web-auth-password")) {
         espConfig::miscConfig.webPassword = p->value().c_str();
-      } else if (!strcmp(p->name().c_str(), "nfc-ss-gpio-pin")) {
-        if (!GPIO_IS_VALID_GPIO(p->value().toInt()) && !GPIO_IS_VALID_OUTPUT_GPIO(p->value().toInt()) && p->value().toInt() != 255) {
-          std::string msg = p->value().c_str();
-          msg.append(" is not a valid GPIO Pin");
-          request->send(200, "text/plain", msg.c_str());
-          return;
-        }
-        espConfig::miscConfig.nfcGpioPins[0] = p->value().toInt();
-      } else if (!strcmp(p->name().c_str(), "nfc-sck-gpio-pin")) {
-        if (!GPIO_IS_VALID_GPIO(p->value().toInt()) && !GPIO_IS_VALID_OUTPUT_GPIO(p->value().toInt()) && p->value().toInt() != 255) {
-          std::string msg = p->value().c_str();
-          msg.append(" is not a valid GPIO Pin");
-          request->send(200, "text/plain", msg.c_str());
-          return;
-        }
-        espConfig::miscConfig.nfcGpioPins[1] = p->value().toInt();
-      } else if (!strcmp(p->name().c_str(), "nfc-miso-gpio-pin")) {
-        if (!GPIO_IS_VALID_GPIO(p->value().toInt()) && !GPIO_IS_VALID_OUTPUT_GPIO(p->value().toInt()) && p->value().toInt() != 255) {
-          std::string msg = p->value().c_str();
-          msg.append(" is not a valid GPIO Pin");
-          request->send(200, "text/plain", msg.c_str());
-          return;
-        }
-        espConfig::miscConfig.nfcGpioPins[2] = p->value().toInt();
-      } else if (!strcmp(p->name().c_str(), "nfc-mosi-gpio-pin")) {
-        if (!GPIO_IS_VALID_GPIO(p->value().toInt()) && !GPIO_IS_VALID_OUTPUT_GPIO(p->value().toInt()) && p->value().toInt() != 255) {
-          std::string msg = p->value().c_str();
-          msg.append(" is not a valid GPIO Pin");
-          request->send(200, "text/plain", msg.c_str());
-          return;
-        }
-        espConfig::miscConfig.nfcGpioPins[3] = p->value().toInt();
       }
     }
     json json_misc_config = espConfig::miscConfig;
@@ -560,37 +497,7 @@ void setupWeb() {
   actionsConfigHandle->onRequest([](AsyncWebServerRequest* request) {
     const char* TAG = "actions-config";
     int params = request->params();
-    for (int i = 0; i < params; i++) {
-      const AsyncWebParameter* p = request->getParam(i);
-      LOG(V, "POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-      if (!strcmp(p->name().c_str(), "gpio-a-pin")) {
-        if (!GPIO_IS_VALID_GPIO(p->value().toInt()) && !GPIO_IS_VALID_OUTPUT_GPIO(p->value().toInt()) && p->value().toInt() != 255) {
-          std::string msg = p->value().c_str();
-          msg.append(" is not a valid GPIO Pin");
-          request->send(200, "text/plain", msg.c_str());
-          return;
-        }
-        if (espConfig::miscConfig.gpioActionPin == 255 && p->value().toInt() != 255 && gpio_lock_task_handle == nullptr) {
-          pinMode(p->value().toInt(), OUTPUT);
-          xTaskCreate(gpio_task, "gpio_task", 4096, NULL, 2, &gpio_lock_task_handle);
-        } else if (espConfig::miscConfig.gpioActionPin != 255 && p->value().toInt() == 255 && gpio_lock_task_handle != nullptr) {
-          gpioLockAction status{ .source = gpioLockAction::OTHER, .action = 2 };
-          xQueueSend(gpio_lock_handle, &status, 0);
-          gpio_lock_task_handle = nullptr;
-        }
-        espConfig::miscConfig.gpioActionPin = p->value().toInt();
-      } else if (!strcmp(p->name().c_str(), "gpio-a-lock")) {
-        espConfig::miscConfig.gpioActionLockState = p->value().toInt();
-      } else if (!strcmp(p->name().c_str(), "homekey-gpio-state")) {
-        espConfig::miscConfig.hkGpioControlledState = p->value().toInt();
-      } else if (!strcmp(p->name().c_str(), "gpio-a-unlock")) {
-        espConfig::miscConfig.gpioActionUnlockState = p->value().toInt();
-      } else if (!strcmp(p->name().c_str(), "gpio-a-momentary")) {
-        espConfig::miscConfig.gpioActionMomentaryEnabled = p->value().toInt();
-      } else if (!strcmp(p->name().c_str(), "gpio-a-mo-timeout")) {
-        espConfig::miscConfig.gpioActionMomentaryTimeout = p->value().toInt();
-      }
-    }
+    
     json json_misc_config = espConfig::miscConfig;
     std::vector<uint8_t> misc_buf = nlohmann::json::to_msgpack(json_misc_config);
     esp_err_t set_nvs = nvs_set_blob(savedData, "MISCDATA", misc_buf.data(), misc_buf.size());
@@ -641,7 +548,6 @@ void setupWeb() {
     LOG(I, "Web Authentication Enabled");
     infoHandle->setAuthentication(espConfig::miscConfig.webUsername.c_str(), espConfig::miscConfig.webPassword.c_str());
     miscHandle->setAuthentication(espConfig::miscConfig.webUsername.c_str(), espConfig::miscConfig.webPassword.c_str());
-    actionsHandle->setAuthentication(espConfig::miscConfig.webUsername.c_str(), espConfig::miscConfig.webPassword.c_str());
     assetsHandle->setAuthentication(espConfig::miscConfig.webUsername.c_str(), espConfig::miscConfig.webPassword.c_str());
     rootHandle->setAuthentication(espConfig::miscConfig.webUsername.c_str(), espConfig::miscConfig.webPassword.c_str());
     miscConfigHandle->setAuthentication(espConfig::miscConfig.webUsername.c_str(), espConfig::miscConfig.webPassword.c_str());
@@ -713,10 +619,8 @@ void nfc_thread_entry(void* arg) {
         HKAuthenticationContext authCtx(*nfc, readerData, savedData);
         auto authResult = authCtx.authenticate(hkFlow);
         if (std::get<2>(authResult) != kFlowFailed) {
-          if (espConfig::miscConfig.gpioActionPin != 255 && espConfig::miscConfig.hkGpioControlledState) {
-            const gpioLockAction action{ .source = gpioLockAction::HOMEKEY, .action = 0 };
-            xQueueSend(gpio_lock_handle, &action, 0);
-          }
+          const gpioLockAction action{ .source = gpioLockAction::HOMEKEY, .action = 0 };
+          xQueueSend(gpio_lock_handle, &action, 0);
           json payload;
           payload["issuerId"] = hex_representation(std::get<0>(authResult));
           payload["endpointId"] = hex_representation(std::get<1>(authResult));
@@ -754,9 +658,7 @@ void nfc_thread_entry(void* arg) {
 
 void setup() {
   Serial.begin(115200);
-  const esp_app_desc_t* app_desc = esp_ota_get_app_description();
   std::string app_version = "0.2.0";
-  gpio_led_handle = xQueueCreate(2, sizeof(uint8_t));
   gpio_lock_handle = xQueueCreate(2, sizeof(gpioLockAction));
   size_t len;
   const char* TAG = "SETUP";
@@ -795,9 +697,7 @@ void setup() {
   }
   pn532spi = new PN532_SPI(espConfig::miscConfig.nfcGpioPins[0], espConfig::miscConfig.nfcGpioPins[1], espConfig::miscConfig.nfcGpioPins[2], espConfig::miscConfig.nfcGpioPins[3]);
   nfc = new PN532(*pn532spi);
-  if (espConfig::miscConfig.gpioActionPin && espConfig::miscConfig.gpioActionPin != 255) {
-    pinMode(espConfig::miscConfig.gpioActionPin, OUTPUT);
-  }
+  pinMode(espConfig::miscConfig.gpioActionPin, OUTPUT);
   if (!LittleFS.begin(true)) {
     Serial.println("An Error has occurred while mounting LITTLEFS");
     return;
@@ -831,6 +731,7 @@ void setup() {
   new Characteristic::Model("MIAU");
   new Characteristic::HardwareRevision("0.2.0");
   new Characteristic::Name(DEVICE_NAME);
+
   uint8_t mac[6];
   WiFi.macAddress(mac);
   char macStr[18] = { 0 };
@@ -838,7 +739,9 @@ void setup() {
   std::string serialNumber = "MI-";
   serialNumber.append(macStr);
   new Characteristic::SerialNumber(serialNumber.c_str());
+
   new Characteristic::FirmwareRevision(app_version.c_str());
+
   std::array<uint8_t, 6> decB64 = hk_color_vals[HK_COLOR(espConfig::miscConfig.hk_key_color)];
   TLV8 hwfinish(NULL, 0);
   hwfinish.unpack(decB64.data(), decB64.size());
@@ -849,12 +752,15 @@ void setup() {
   new NFCAccess();
   new Service::HAPProtocolInformation();
   new Characteristic::Version();
+
   homeSpan.setControllerCallback(pairCallback);
   homeSpan.setWifiCallback([]() { setupWeb(); });
-  if (espConfig::miscConfig.gpioActionPin != 255) {
-    xTaskCreate(gpio_task, "gpio_task", 4096, NULL, 2, &gpio_lock_task_handle);
-  }
+
+  xTaskCreate(gpio_task, "gpio_task", 4096, NULL, 2, &gpio_lock_task_handle);
   xTaskCreate(nfc_thread_entry, "nfc_task", 8192, NULL, 1, NULL);
+
+  MDNS.begin(MDNS_NAME);
+  MDNS.addService("http", "tcp", 80);
 }
 
 //////////////////////////////////////
